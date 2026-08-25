@@ -1,0 +1,137 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  LIVE
+  CLOSED
+}
+
+enum AgendaItemStatus {
+  PENDING
+  OPEN
+  CLOSED
+}
+
+enum AttendanceSource {
+  MANUAL
+  CAMERA
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+}
+
+model Council {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  slug    String   @unique
+  members Member[]
+  meetings Meeting[]
+}
+
+model Member {
+  id             String   @id @default(cuid())
+  council        Council  @relation(fields: [councilId], references: [id])
+  councilId      String
+  segmento       String
+  ente           String
+  representante  String
+  pesoVoto       Float    @default(1)
+  ordem          Int      @default(0)
+
+  attendanceEvents AttendanceEvent[]
+  voteSnapshots    VoteSnapshot[]
+  votes            Vote[]
+
+  @@index([councilId])
+}
+
+model Meeting {
+  id              String        @id @default(cuid())
+  council         Council       @relation(fields: [councilId], references: [id])
+  councilId       String
+  titulo          String
+  status          MeetingStatus @default(SCHEDULED)
+  livekitRoomName String        @unique
+  sheetId         String?
+  sheetUrl        String?
+  createdAt       DateTime      @default(now())
+  closedAt        DateTime?
+
+  agendaItems      AgendaItem[]
+  attendanceEvents AttendanceEvent[]
+  minutes          MeetingMinutes?
+
+  @@index([councilId])
+}
+
+model AgendaItem {
+  id         String           @id @default(cuid())
+  meeting    Meeting          @relation(fields: [meetingId], references: [id])
+  meetingId  String
+  titulo     String
+  status     AgendaItemStatus @default(PENDING)
+  candidato  String?
+  ordem      Int              @default(0)
+  openedAt   DateTime?
+  closedAt   DateTime?
+
+  snapshots VoteSnapshot[]
+  votes     Vote[]
+
+  @@index([meetingId])
+}
+
+model AttendanceEvent {
+  id        String           @id @default(cuid())
+  meeting   Meeting          @relation(fields: [meetingId], references: [id])
+  meetingId String
+  member    Member           @relation(fields: [memberId], references: [id])
+  memberId  String
+  source    AttendanceSource
+  status    AttendanceStatus
+  timestamp DateTime         @default(now())
+
+  @@index([meetingId, memberId])
+}
+
+model VoteSnapshot {
+  id           String     @id @default(cuid())
+  agendaItem   AgendaItem @relation(fields: [agendaItemId], references: [id])
+  agendaItemId String
+  member       Member     @relation(fields: [memberId], references: [id])
+  memberId     String
+  wasPresent   Boolean
+  timestamp    DateTime   @default(now())
+
+  @@unique([agendaItemId, memberId])
+}
+
+model Vote {
+  id           String     @id @default(cuid())
+  agendaItem   AgendaItem @relation(fields: [agendaItemId], references: [id])
+  agendaItemId String
+  member       Member     @relation(fields: [memberId], references: [id])
+  memberId     String
+  choice       String
+  operatorId   String?
+  timestamp    DateTime   @default(now())
+
+  @@unique([agendaItemId, memberId])
+}
+
+model MeetingMinutes {
+  id          String   @id @default(cuid())
+  meeting     Meeting  @relation(fields: [meetingId], references: [id])
+  meetingId   String   @unique
+  texto       String
+  generatedAt DateTime @default(now())
+}

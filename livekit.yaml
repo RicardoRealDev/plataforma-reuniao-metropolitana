@@ -1,0 +1,26 @@
+# Config de desenvolvimento local. Troque as chaves antes de qualquer uso real
+# (nunca commite as chaves de produção neste arquivo — use variáveis de ambiente
+# ou um arquivo fora do controle de versão nesse caso).
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882      # mux de porta única — mais simples de publicar no Docker Desktop/Windows
+                       # que uma faixa de 10 mil portas UDP.
+  # Sem isso, o LiveKit anuncia o IP interno do container Docker (ex: 172.18.0.x),
+  # que não é alcançável pelo navegador rodando no host — a conexão de mídia (ICE)
+  # nunca fecha. 127.0.0.1 é o valor certo quando cliente e servidor estão na mesma
+  # máquina (teste local). Trocar para o IP público/domínio real ao sair de localhost.
+  use_external_ip: false
+  node_ip: 127.0.0.1
+
+keys:
+  quorumdigitaldevkey: quorumdigitaldevsecret000000000000
+
+webhook:
+  api_key: quorumdigitaldevkey
+  urls:
+    - http://host.docker.internal:4000/webhooks/livekit
+
+# TURN embutido fica desligado por padrão no MVP local. Ligar (turn.enabled: true,
+# com domínio e certificado TLS próprios) só é necessário fora de localhost, quando
+# conselheiros reais entrarem de redes residenciais/móveis com NAT restritivo.

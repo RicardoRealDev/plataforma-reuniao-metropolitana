@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quorum
+      POSTGRES_PASSWORD: quorum
+      POSTGRES_DB: quorum_digital
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  livekit:
+    image: livekit/livekit-server:v1.13.5
+    restart: unless-stopped
+    command: --config /etc/livekit.yaml
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7880:7880"       # signaling (HTTP/WS)
+      - "7881:7881/tcp"   # RTC over TCP (fallback)
+      - "7882:7882/udp"   # RTC over UDP (single-port mux — avoids publishing a 10k port range on Docker Desktop/Windows)
+    depends_on:
+      - postgres
+
+volumes:
+  postgres_data:
