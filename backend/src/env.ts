@@ -7,6 +7,7 @@ const schema = z.object({
   LIVEKIT_API_KEY: z.string(),
   LIVEKIT_API_SECRET: z.string(),
   PORT: z.coerce.number().default(4000),
+  ADMIN_SEED_TOKEN: z.string().optional(),
   GOOGLE_SERVICE_ACCOUNT_JSON_PATH: z.string().optional(),
   SHEETS_SYNC_ENABLED: z
     .string()

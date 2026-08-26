@@ -7,6 +7,7 @@ import { registerMeetingRoutes } from './routes/meetings.js';
 import { registerAttendanceRoutes } from './routes/attendance.js';
 import { registerAgendaRoutes } from './routes/agenda.js';
 import { registerDashboardRoutes } from './routes/dashboard.js';
+import { registerAdminRoutes } from './routes/admin.js';
 
 const app = Fastify({ logger: true });
 
@@ -18,6 +19,7 @@ registerMeetingRoutes(app);
 registerAttendanceRoutes(app);
 registerAgendaRoutes(app);
 registerDashboardRoutes(app);
+registerAdminRoutes(app);
 
 app.get('/', async () => ({ ok: true, servico: 'Quórum Digital — backend' }));
 
