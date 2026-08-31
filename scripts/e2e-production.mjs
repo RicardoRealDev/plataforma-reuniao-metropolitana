@@ -57,6 +57,7 @@ await post(`/agenda/${agenda.id}/close`);
 const dashboard = await request(`/meetings/${meeting.id}/dashboard`);
 const closed = await post(`/meetings/${meeting.id}/close`);
 const minutes = await request(`/meetings/${meeting.id}/minutes`);
+const meetingDetails = await request(`/meetings/${meeting.id}`);
 
 const summary = {
   meetingId: meeting.id,
@@ -68,6 +69,7 @@ const summary = {
   quorumAtingido: result.quorumAtingido,
   dashboardPresentes: dashboard.resumo.presentes,
   ataGerada: Boolean(minutes.texto?.trim()),
+  sheetUrl: meetingDetails.sheetUrl,
 };
 
 console.log(JSON.stringify(summary, null, 2));
@@ -75,7 +77,8 @@ console.log(JSON.stringify(summary, null, 2));
 if (
   summary.meetingStatus !== 'CLOSED' ||
   summary.aptos !== presentMembers.length ||
-  !summary.ataGerada
+  !summary.ataGerada ||
+  (process.env.REQUIRE_SHEET === 'true' && !summary.sheetUrl)
 ) {
   throw new Error('O fluxo E2E terminou com resultado inesperado.');
 }
