@@ -14,11 +14,14 @@ const errorMessages: Record<string, string> = {
 };
 
 export function Login() {
-  const { exchange } = useAuth();
+  const { exchange, passwordLogin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [erro, setErro] = useState('');
   const [enviando, setEnviando] = useState(false);
+  const [mostrarAdmin, setMostrarAdmin] = useState(false);
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -43,6 +46,20 @@ export function Login() {
     window.location.assign(`${MTLS_AUTH_URL}?returnPath=${encodeURIComponent(requested)}`);
   }
 
+  async function entrarComoAdmin(event: React.FormEvent) {
+    event.preventDefault();
+    setErro('');
+    setEnviando(true);
+    try {
+      const user = await passwordLogin(username, password);
+      navigate(user.mustChangePassword ? '/trocar-senha' : '/', { replace: true });
+    } catch (error) {
+      setErro(error instanceof Error ? error.message : 'Não foi possível entrar.');
+    } finally {
+      setEnviando(false);
+    }
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-100 p-6">
       <section className="w-full max-w-md space-y-5 rounded-xl bg-white p-8 shadow-sm">
@@ -60,6 +77,16 @@ export function Login() {
         <button disabled={enviando} onClick={entrar} className="w-full rounded-lg bg-slate-900 px-4 py-2.5 font-medium text-white disabled:opacity-50">
           {enviando ? 'Concluindo autenticação…' : 'Entrar com token físico'}
         </button>
+        <button className="w-full text-sm text-slate-600 underline" onClick={() => setMostrarAdmin((value) => !value)}>
+          {mostrarAdmin ? 'Ocultar acesso administrativo' : 'Acesso administrativo de contingência'}
+        </button>
+        {mostrarAdmin && (
+          <form className="space-y-3 border-t border-slate-200 pt-4" onSubmit={entrarComoAdmin}>
+            <input aria-label="Usuário administrativo" autoComplete="username" className="w-full rounded border border-slate-300 p-2" placeholder="Usuário" value={username} onChange={(event) => setUsername(event.target.value)} />
+            <input aria-label="Senha administrativa" autoComplete="current-password" type="password" className="w-full rounded border border-slate-300 p-2" placeholder="Senha" value={password} onChange={(event) => setPassword(event.target.value)} />
+            <button disabled={enviando} className="w-full rounded bg-slate-700 px-4 py-2 text-white disabled:opacity-50">Entrar como administrador</button>
+          </form>
+        )}
         <p className="text-xs text-slate-500">O PIN e a chave privada permanecem no dispositivo e nunca são enviados ao Quórum Digital.</p>
       </section>
     </main>

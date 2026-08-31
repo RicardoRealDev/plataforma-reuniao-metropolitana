@@ -10,6 +10,7 @@ import { Dashboard } from './pages/Dashboard.js';
 import { Login } from './pages/Login.js';
 import { AuthProvider } from './lib/auth.js';
 import { ProtectedRoute } from './components/ProtectedRoute.js';
+import { TrocarSenha } from './pages/TrocarSenha.js';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
@@ -18,6 +19,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/trocar-senha" element={<ProtectedRoute><TrocarSenha /></ProtectedRoute>} />
           <Route path="/reuniao/:meetingId/sala" element={<ProtectedRoute><SalaDeVideo /></ProtectedRoute>} />
           <Route path="/reuniao/:meetingId/mesa" element={<ProtectedRoute><MesaOperador /></ProtectedRoute>} />
           <Route path="/reuniao/:meetingId/dashboard" element={<Dashboard />} />

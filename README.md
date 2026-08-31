@@ -112,6 +112,9 @@ a testes.
 - O webhook valida a assinatura enviada pelo LiveKit.
 - O login institucional usa diretamente o certificado físico ICP-Brasil por
   meio de um gateway mTLS próprio, sem redirecionamento ao GOV.BR.
+- Administradores podem ter um acesso de contingência por usuário e senha, com
+  bloqueio após cinco falhas, sessão de duas horas e troca obrigatória da senha
+  temporária no primeiro login.
 
 ### Variáveis do login por token físico
 

@@ -5,8 +5,14 @@ CREATE TABLE "InstitutionalUser" (
     "function" TEXT NOT NULL,
     "accessLevel" TEXT NOT NULL DEFAULT 'PARTICIPANT',
     "memberId" TEXT,
-    "certificateFingerprintHash" TEXT NOT NULL,
-    "certificateFingerprintLast8" TEXT NOT NULL,
+    "certificateFingerprintHash" TEXT,
+    "certificateFingerprintLast8" TEXT,
+    "usernameHash" TEXT,
+    "usernameDisplay" TEXT,
+    "passwordSalt" TEXT,
+    "passwordHash" TEXT,
+    "passwordIterations" INTEGER,
+    "mustChangePassword" BOOLEAN NOT NULL DEFAULT false,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastLoginAt" TIMESTAMP(3),
@@ -39,7 +45,16 @@ CREATE TABLE "AuthSession" (
     CONSTRAINT "AuthSession_pkey" PRIMARY KEY ("id")
 );
 
+CREATE TABLE "PasswordLoginGuard" (
+    "usernameHash" TEXT NOT NULL,
+    "failedCount" INTEGER NOT NULL DEFAULT 0,
+    "lockedUntil" TIMESTAMP(3),
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "PasswordLoginGuard_pkey" PRIMARY KEY ("usernameHash")
+);
+
 CREATE UNIQUE INDEX "InstitutionalUser_certificateFingerprintHash_key" ON "InstitutionalUser"("certificateFingerprintHash");
+CREATE UNIQUE INDEX "InstitutionalUser_usernameHash_key" ON "InstitutionalUser"("usernameHash");
 CREATE INDEX "InstitutionalUser_memberId_idx" ON "InstitutionalUser"("memberId");
 CREATE UNIQUE INDEX "AuthSession_tokenHash_key" ON "AuthSession"("tokenHash");
 CREATE INDEX "AuthSession_userId_idx" ON "AuthSession"("userId");

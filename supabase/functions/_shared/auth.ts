@@ -11,6 +11,7 @@ export interface AuthUser {
   function: string;
   accessLevel: AccessLevel;
   memberId: string | null;
+  mustChangePassword: boolean;
 }
 
 const encoder = new TextEncoder();
@@ -43,7 +44,7 @@ export async function authenticate(c: Context): Promise<AuthUser | null> {
 
   const tokenHash = await hashToken(token);
   const [user] = await sql<AuthUser[]>`
-    select u.id, u.name, u.institution, u."function", u."accessLevel", u."memberId"
+    select u.id, u.name, u.institution, u."function", u."accessLevel", u."memberId", u."mustChangePassword"
     from "AuthSession" s
     join "InstitutionalUser" u on u.id = s."userId"
     where s."tokenHash" = ${tokenHash}
@@ -58,11 +59,14 @@ export async function authenticate(c: Context): Promise<AuthUser | null> {
   return user ?? null;
 }
 
-export async function requireAuth(c: Context, levels?: AccessLevel[]): Promise<AuthUser | Response> {
+export async function requireAuth(c: Context, levels?: AccessLevel[], allowPasswordChange = false): Promise<AuthUser | Response> {
   const user = await authenticate(c);
   if (!user) return c.json({ ok: false, erro: "sessão inválida ou expirada" }, 401);
   if (levels && !levels.includes(user.accessLevel)) {
     return c.json({ ok: false, erro: "usuário sem permissão para esta operação" }, 403);
+  }
+  if (user.mustChangePassword && !allowPasswordChange) {
+    return c.json({ ok: false, erro: "troca de senha obrigatória", code: "PASSWORD_CHANGE_REQUIRED" }, 403);
   }
   return user;
 }
