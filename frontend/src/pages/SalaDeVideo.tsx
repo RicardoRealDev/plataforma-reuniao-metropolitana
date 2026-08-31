@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   LiveKitRoom,
   GridLayout,
@@ -29,6 +29,7 @@ function Conferencia() {
 
 export function SalaDeVideo() {
   const { meetingId } = useParams<{ meetingId: string }>();
+  const navigate = useNavigate();
   const [meeting, setMeeting] = useState<(Meeting & { council: Council }) | null>(null);
   const [memberId, setMemberId] = useState('');
   const [token, setToken] = useState<string | null>(null);
@@ -46,7 +47,17 @@ export function SalaDeVideo() {
 
   if (token && meeting) {
     return (
-      <LiveKitRoom token={token} serverUrl={LIVEKIT_URL} connect data-lk-theme="default" style={{ height: '100vh' }}>
+      <LiveKitRoom
+        token={token}
+        serverUrl={LIVEKIT_URL}
+        connect
+        data-lk-theme="default"
+        style={{ height: '100vh' }}
+        onDisconnected={() => {
+          setToken(null);
+          navigate('/');
+        }}
+      >
         <Conferencia />
       </LiveKitRoom>
     );
