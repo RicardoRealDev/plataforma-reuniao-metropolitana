@@ -11,6 +11,7 @@ import {
 import { Track } from 'livekit-client';
 import { api } from '../lib/api.js';
 import type { Council, Meeting } from '../lib/types.js';
+import { useAuth } from '../lib/auth.js';
 
 const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL ?? 'ws://localhost:7880';
 
@@ -28,6 +29,7 @@ function Conferencia() {
 }
 
 export function SalaDeVideo() {
+  const { user } = useAuth();
   const { meetingId } = useParams<{ meetingId: string }>();
   const navigate = useNavigate();
   const [meeting, setMeeting] = useState<(Meeting & { council: Council }) | null>(null);
@@ -38,6 +40,10 @@ export function SalaDeVideo() {
     if (!meetingId) return;
     api.get<Meeting & { council: Council }>(`/meetings/${meetingId}`).then(setMeeting);
   }, [meetingId]);
+
+  useEffect(() => {
+    if (user?.accessLevel === 'PARTICIPANT' && user.memberId) setMemberId(user.memberId);
+  }, [user]);
 
   async function entrar() {
     if (!meetingId || !memberId) return;
@@ -73,6 +79,7 @@ export function SalaDeVideo() {
             className="mb-4 w-full rounded border border-gray-300 p-2"
             value={memberId}
             onChange={(e) => setMemberId(e.target.value)}
+            disabled={user?.accessLevel === 'PARTICIPANT'}
           >
             <option value="">Selecione seu ente/representação</option>
             {meeting.council.members.map((m) => (

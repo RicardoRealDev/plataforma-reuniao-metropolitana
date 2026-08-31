@@ -7,16 +7,22 @@ import { Home } from './pages/Home.js';
 import { SalaDeVideo } from './pages/SalaDeVideo.js';
 import { MesaOperador } from './pages/MesaOperador.js';
 import { Dashboard } from './pages/Dashboard.js';
+import { Login } from './pages/Login.js';
+import { AuthProvider } from './lib/auth.js';
+import { ProtectedRoute } from './components/ProtectedRoute.js';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/reuniao/:meetingId/sala" element={<SalaDeVideo />} />
-        <Route path="/reuniao/:meetingId/mesa" element={<MesaOperador />} />
-        <Route path="/reuniao/:meetingId/dashboard" element={<Dashboard />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/reuniao/:meetingId/sala" element={<ProtectedRoute><SalaDeVideo /></ProtectedRoute>} />
+          <Route path="/reuniao/:meetingId/mesa" element={<ProtectedRoute><MesaOperador /></ProtectedRoute>} />
+          <Route path="/reuniao/:meetingId/dashboard" element={<Dashboard />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   </React.StrictMode>,
 );

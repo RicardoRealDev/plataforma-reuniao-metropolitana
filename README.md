@@ -109,8 +109,22 @@ a testes.
 - O segredo da API do LiveKit fica somente no servidor; o navegador recebe um
   token temporário de participante.
 - O webhook valida a assinatura enviada pelo LiveKit.
-- O MVP ainda precisa de autenticação administrativa antes de uso público com
-  dados reais. Até essa etapa, trate a URL como ambiente de homologação.
+- O login institucional usa certificado físico ICP-Brasil por meio do GOV.BR.
+  A integração permanece em homologação até o órgão fornecer as credenciais.
+
+### Variáveis do Login GOV.BR
+
+```env
+AUTH_TOKEN_PEPPER=segredo-aleatorio-com-pelo-menos-32-caracteres
+GOVBR_CLIENT_ID=credencial-fornecida-pelo-govbr
+GOVBR_CLIENT_SECRET=segredo-fornecido-pelo-govbr
+GOVBR_BASE_URL=https://sso.staging.acesso.gov.br
+GOVBR_REDIRECT_URI=https://SEU_PROJETO.supabase.co/functions/v1/api/auth/govbr/callback
+GOVBR_FRONTEND_URL=https://seu-dominio-oficial.gov.br
+```
+
+O fluxo e as decisões de segurança estão documentados em
+`docs/adr/0001-autenticacao-certificado-govbr.md`.
 
 ## Fora de escopo do MVP
 

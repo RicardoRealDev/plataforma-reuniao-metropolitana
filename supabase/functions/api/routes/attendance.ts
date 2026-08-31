@@ -4,6 +4,7 @@ import { sql } from "../../_shared/db.ts";
 import { recordAttendance, getCurrentAttendance } from "../../_shared/domain/attendance.ts";
 import { scheduleSheetSync } from "../../_shared/sheets/client.ts";
 import type { Meeting, Member } from "../../_shared/types.ts";
+import { isAuthResponse, requireAuth } from "../../_shared/auth.ts";
 
 const manualAttendanceSchema = z.object({
   memberId: z.string(),
@@ -12,6 +13,8 @@ const manualAttendanceSchema = z.object({
 
 export function registerAttendanceRoutes(app: Hono) {
   app.post("/meetings/:id/attendance", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const { memberId, status } = manualAttendanceSchema.parse(await c.req.json());
 

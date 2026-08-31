@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import type { Council, Meeting } from '../lib/types.js';
+import { useAuth } from '../lib/auth.js';
 
 export function Home() {
+  const { user, logout } = useAuth();
   const [councils, setCouncils] = useState<Council[]>([]);
   const [councilId, setCouncilId] = useState('');
   const [titulo, setTitulo] = useState('');
@@ -30,9 +32,19 @@ export function Home() {
 
   return (
     <div className="mx-auto max-w-2xl p-8">
-      <h1 className="text-2xl font-semibold mb-6">Quórum Digital</h1>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Quórum Digital</h1>
+          {user && <p className="mt-1 text-sm text-gray-500">{user.name} · {user.function} · {user.institution}</p>}
+        </div>
+        {user ? (
+          <button className="text-sm text-slate-700 underline" onClick={() => void logout()}>Sair</button>
+        ) : (
+          <Link className="rounded bg-slate-800 px-4 py-2 text-sm text-white" to="/login">Entrar</Link>
+        )}
+      </div>
 
-      <div className="mb-8 space-y-3">
+      {user && user.accessLevel !== 'PARTICIPANT' && <div className="mb-8 space-y-3">
         <label className="block text-sm font-medium text-gray-700">Conselho</label>
         <select
           className="w-full rounded border border-gray-300 p-2"
@@ -56,7 +68,7 @@ export function Home() {
         <button className="rounded bg-slate-800 px-4 py-2 text-white" onClick={criarReuniao}>
           Criar reunião
         </button>
-      </div>
+      </div>}
 
       <h2 className="mb-3 text-lg font-medium">Reuniões</h2>
       <ul className="space-y-2">
@@ -67,12 +79,12 @@ export function Home() {
               <div className="text-sm text-gray-500">{meeting.status}</div>
             </div>
             <div className="flex gap-3 text-sm">
-              <Link className="text-slate-700 underline" to={`/reuniao/${meeting.id}/mesa`}>
+              {user && user.accessLevel !== 'PARTICIPANT' && <Link className="text-slate-700 underline" to={`/reuniao/${meeting.id}/mesa`}>
                 Mesa
-              </Link>
-              <Link className="text-slate-700 underline" to={`/reuniao/${meeting.id}/sala`}>
+              </Link>}
+              {user && <Link className="text-slate-700 underline" to={`/reuniao/${meeting.id}/sala`}>
                 Sala de vídeo
-              </Link>
+              </Link>}
               <Link className="text-slate-700 underline" to={`/reuniao/${meeting.id}/dashboard`}>
                 Dashboard
               </Link>

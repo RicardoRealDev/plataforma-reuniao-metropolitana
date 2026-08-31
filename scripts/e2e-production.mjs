@@ -1,7 +1,12 @@
 const baseUrl = process.env.API_URL;
+const accessToken = process.env.E2E_ACCESS_TOKEN;
 
 if (!baseUrl) {
   throw new Error('Defina API_URL com a URL da Edge Function api.');
+}
+
+if (!accessToken) {
+  throw new Error('Defina E2E_ACCESS_TOKEN com uma sessão de operador válida.');
 }
 
 async function request(path, options = {}) {
@@ -9,6 +14,7 @@ async function request(path, options = {}) {
     ...options,
     headers: {
       'content-type': 'application/json; charset=utf-8',
+      authorization: `Bearer ${accessToken}`,
       ...options.headers,
     },
   });

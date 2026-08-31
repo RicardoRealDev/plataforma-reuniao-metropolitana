@@ -5,6 +5,7 @@ import { issueParticipantToken } from "../../_shared/livekit/client.ts";
 import { createMeetingSpreadsheet, syncMeetingToSheet } from "../../_shared/sheets/client.ts";
 import { generateMinutes } from "../../_shared/domain/minutes.ts";
 import type { AgendaItem, Council, Meeting, Member } from "../../_shared/types.ts";
+import { isAuthResponse, requireAuth } from "../../_shared/auth.ts";
 
 const createMeetingSchema = z.object({
   councilId: z.string(),
@@ -17,6 +18,8 @@ const tokenSchema = z.object({
 
 export function registerMeetingRoutes(app: Hono) {
   app.post("/meetings", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const body = createMeetingSchema.parse(await c.req.json());
 
     const [meeting] = await sql<Meeting[]>`
@@ -47,6 +50,8 @@ export function registerMeetingRoutes(app: Hono) {
   });
 
   app.post("/meetings/:id/start", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const [meeting] = await sql<Meeting[]>`
       update "Meeting" set status = 'LIVE' where id = ${id} returning *
@@ -56,6 +61,8 @@ export function registerMeetingRoutes(app: Hono) {
   });
 
   app.post("/meetings/:id/close", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const [meeting] = await sql<Meeting[]>`
       update "Meeting" set status = 'CLOSED', "closedAt" = now() where id = ${id} returning *
@@ -69,8 +76,14 @@ export function registerMeetingRoutes(app: Hono) {
   });
 
   app.post("/meetings/:id/token", async (c) => {
+    const auth = await requireAuth(c);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const { memberId } = tokenSchema.parse(await c.req.json());
+
+    if (auth.accessLevel === "PARTICIPANT" && auth.memberId !== memberId) {
+      return c.json({ ok: false, erro: "token não pertence a esta representação" }, 403);
+    }
 
     const [[meeting], [member]] = await Promise.all([
       sql<Meeting[]>`select * from "Meeting" where id = ${id}`,
@@ -78,6 +91,9 @@ export function registerMeetingRoutes(app: Hono) {
     ]);
     if (!meeting) throw new Error(`Meeting ${id} não encontrado`);
     if (!member) throw new Error(`Member ${memberId} não encontrado`);
+    if (member.councilId !== meeting.councilId) {
+      return c.json({ ok: false, erro: "representação não pertence ao conselho desta reunião" }, 403);
+    }
 
     const token = await issueParticipantToken({
       roomName: meeting.livekitRoomName,

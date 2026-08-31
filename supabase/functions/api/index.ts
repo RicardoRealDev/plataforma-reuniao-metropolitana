@@ -6,13 +6,14 @@ import { registerAttendanceRoutes } from "./routes/attendance.ts";
 import { registerAgendaRoutes } from "./routes/agenda.ts";
 import { registerDashboardRoutes } from "./routes/dashboard.ts";
 import { registerAdminRoutes } from "./routes/admin.ts";
+import { registerAuthRoutes } from "./routes/auth.ts";
 
 // Supabase encaminha a function com o prefixo /functions/v1 removido, mas
 // mantém o nome da function no path (ex: /functions/v1/api/councils chega
 // aqui como /api/councils) — confirmado empiricamente com uma rota de debug.
 const app = new Hono().basePath("/api");
 
-app.use("*", cors({ origin: "*" }));
+app.use("*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization", "X-Admin-Token"] }));
 
 app.onError((err, c) => {
   console.error(err);
@@ -22,6 +23,7 @@ app.onError((err, c) => {
 app.get("/", (c) => c.json({ ok: true, servico: "Quórum Digital — backend" }));
 
 registerCouncilRoutes(app);
+registerAuthRoutes(app);
 registerMeetingRoutes(app);
 registerAttendanceRoutes(app);
 registerAgendaRoutes(app);

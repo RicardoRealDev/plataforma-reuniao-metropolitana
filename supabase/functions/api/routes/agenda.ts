@@ -10,6 +10,7 @@ import {
 } from "../../_shared/domain/quorum.ts";
 import { scheduleSheetSync } from "../../_shared/sheets/client.ts";
 import type { AgendaItem } from "../../_shared/types.ts";
+import { isAuthResponse, requireAuth } from "../../_shared/auth.ts";
 
 const createAgendaSchema = z.object({
   titulo: z.string().min(1),
@@ -31,6 +32,8 @@ async function getAgendaItemOrThrow(id: string): Promise<AgendaItem> {
 
 export function registerAgendaRoutes(app: Hono) {
   app.post("/meetings/:id/agenda", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const body = createAgendaSchema.parse(await c.req.json());
     const [item] = await sql<AgendaItem[]>`
@@ -42,6 +45,8 @@ export function registerAgendaRoutes(app: Hono) {
   });
 
   app.post("/agenda/:id/open", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const result = await openAgendaItem(id);
     const item = await getAgendaItemOrThrow(id);
@@ -50,25 +55,29 @@ export function registerAgendaRoutes(app: Hono) {
   });
 
   app.post("/agenda/:id/bulk-favorable", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
-    const raw = await c.req.json().catch(() => ({}));
-    const { operatorId } = z.object({ operatorId: z.string().optional() }).parse(raw ?? {});
-    await bulkFavorableVote(id, operatorId);
+    await bulkFavorableVote(id, auth.id);
     const item = await getAgendaItemOrThrow(id);
     await scheduleSheetSync(item.meetingId);
     return c.json({ ok: true });
   });
 
   app.post("/agenda/:id/votes", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
-    const { memberId, choice, operatorId } = voteSchema.parse(await c.req.json());
-    await registerVoteException(id, memberId, choice, operatorId);
+    const { memberId, choice } = voteSchema.parse(await c.req.json());
+    await registerVoteException(id, memberId, choice, auth.id);
     const item = await getAgendaItemOrThrow(id);
     await scheduleSheetSync(item.meetingId);
     return c.json({ ok: true });
   });
 
   app.post("/agenda/:id/close", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN", "OPERATOR"]);
+    if (isAuthResponse(auth)) return auth;
     const id = c.req.param("id");
     const item = await closeAgendaItem(id);
     await scheduleSheetSync(item.meetingId);
