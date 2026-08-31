@@ -5,9 +5,8 @@ CREATE TABLE "InstitutionalUser" (
     "function" TEXT NOT NULL,
     "accessLevel" TEXT NOT NULL DEFAULT 'PARTICIPANT',
     "memberId" TEXT,
-    "govbrSubjectHash" TEXT NOT NULL,
-    "cpfLast4" TEXT NOT NULL,
-    "expectedCnpj" TEXT,
+    "certificateFingerprintHash" TEXT NOT NULL,
+    "certificateFingerprintLast8" TEXT NOT NULL,
     "active" BOOLEAN NOT NULL DEFAULT true,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastLoginAt" TIMESTAMP(3),
@@ -15,13 +14,10 @@ CREATE TABLE "InstitutionalUser" (
     CONSTRAINT "InstitutionalUser_accessLevel_check" CHECK ("accessLevel" IN ('ADMIN', 'OPERATOR', 'PARTICIPANT'))
 );
 
-CREATE TABLE "GovBrAuthAttempt" (
-    "stateHash" TEXT NOT NULL,
-    "nonce" TEXT NOT NULL,
-    "codeVerifier" TEXT NOT NULL,
-    "returnPath" TEXT NOT NULL DEFAULT '/',
+CREATE TABLE "MtlsGatewayRequest" (
+    "requestId" TEXT NOT NULL,
     "expiresAt" TIMESTAMP(3) NOT NULL,
-    CONSTRAINT "GovBrAuthAttempt_pkey" PRIMARY KEY ("stateHash")
+    CONSTRAINT "MtlsGatewayRequest_pkey" PRIMARY KEY ("requestId")
 );
 
 CREATE TABLE "AuthExchangeCode" (
@@ -35,7 +31,7 @@ CREATE TABLE "AuthSession" (
     "id" TEXT NOT NULL,
     "userId" TEXT NOT NULL,
     "tokenHash" TEXT NOT NULL,
-    "authMethod" TEXT NOT NULL DEFAULT 'GOVBR_X509_DEVICE',
+    "authMethod" TEXT NOT NULL DEFAULT 'ICPBRASIL_MTLS',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "lastSeenAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "expiresAt" TIMESTAMP(3) NOT NULL,
@@ -43,7 +39,7 @@ CREATE TABLE "AuthSession" (
     CONSTRAINT "AuthSession_pkey" PRIMARY KEY ("id")
 );
 
-CREATE UNIQUE INDEX "InstitutionalUser_govbrSubjectHash_key" ON "InstitutionalUser"("govbrSubjectHash");
+CREATE UNIQUE INDEX "InstitutionalUser_certificateFingerprintHash_key" ON "InstitutionalUser"("certificateFingerprintHash");
 CREATE INDEX "InstitutionalUser_memberId_idx" ON "InstitutionalUser"("memberId");
 CREATE UNIQUE INDEX "AuthSession_tokenHash_key" ON "AuthSession"("tokenHash");
 CREATE INDEX "AuthSession_userId_idx" ON "AuthSession"("userId");
@@ -55,4 +51,3 @@ ALTER TABLE "AuthExchangeCode" ADD CONSTRAINT "AuthExchangeCode_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "InstitutionalUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "AuthSession" ADD CONSTRAINT "AuthSession_userId_fkey"
   FOREIGN KEY ("userId") REFERENCES "InstitutionalUser"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-

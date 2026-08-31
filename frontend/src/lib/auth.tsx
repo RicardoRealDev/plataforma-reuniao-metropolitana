@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { API_URL, api, getAccessToken, setAccessToken } from './api.js';
+import { api, getAccessToken, setAccessToken } from './api.js';
 
 export interface AuthUser {
   id: string;
@@ -48,7 +48,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessToken(null);
       setUser(null);
     }
-    window.location.assign(`${API_URL}/auth/govbr/logout`);
   }, []);
 
   const value = useMemo(() => ({ user, loading, exchange, logout }), [user, loading, exchange, logout]);

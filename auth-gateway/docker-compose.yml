@@ -1,0 +1,24 @@
+services:
+  gateway:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    networks: [auth-internal]
+
+  nginx:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on: [gateway]
+    environment:
+      AUTH_DOMAIN: ${AUTH_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - ./certs:/etc/nginx/icp-brasil:ro
+    networks: [auth-internal]
+
+networks:
+  auth-internal:

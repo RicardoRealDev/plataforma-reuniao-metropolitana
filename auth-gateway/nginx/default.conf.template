@@ -1,0 +1,35 @@
+server {
+    listen 443 ssl;
+    server_name ${AUTH_DOMAIN};
+
+    ssl_certificate /etc/letsencrypt/live/${AUTH_DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${AUTH_DOMAIN}/privkey.pem;
+
+    ssl_client_certificate /etc/nginx/icp-brasil/ca-bundle.pem;
+    ssl_verify_client on;
+    ssl_verify_depth 10;
+    ssl_session_cache off;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    # Habilite após instalar uma LCR válida e manter sua atualização automática:
+    # ssl_crl /etc/nginx/icp-brasil/crl-bundle.pem;
+
+    location ~ ^/(login|certificate)$ {
+        proxy_pass http://gateway:3000$request_uri;
+        proxy_set_header X-SSL-Client-Verify $ssl_client_verify;
+        proxy_set_header X-SSL-Client-Cert $ssl_client_escaped_cert;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Host $host;
+    }
+
+    location = /health {
+        proxy_pass http://gateway:3000/health;
+        proxy_set_header X-SSL-Client-Verify $ssl_client_verify;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${AUTH_DOMAIN};
+    return 301 https://$host$request_uri;
+}

@@ -1,117 +1,79 @@
 import { Hono } from "jsr:@hono/hono@4";
-import { createRemoteJWKSet, jwtVerify } from "npm:jose@6";
 import { z } from "npm:zod@3";
 import { sql } from "../../_shared/db.ts";
-import { authenticate, hashIdentity, hashToken, randomToken } from "../../_shared/auth.ts";
+import { authenticate, hashToken, randomToken } from "../../_shared/auth.ts";
 import { env } from "../../_shared/env.ts";
 
+const gatewaySchema = z.object({
+  requestId: z.string().uuid(),
+  fingerprint: z.string().regex(/^[A-F0-9]{64}$/),
+  subject: z.string().max(2000),
+  issuer: z.string().max(2000),
+  serialNumber: z.string().max(256),
+  validTo: z.string().datetime(),
+  returnPath: z.string().max(1000).default("/"),
+});
 const exchangeSchema = z.object({ code: z.string().min(20).max(200) });
 const encoder = new TextEncoder();
 
-function base64Url(bytes: Uint8Array): string {
-  return btoa(String.fromCharCode(...bytes)).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+function safeReturnPath(value: string): string {
+  return value.startsWith("/") && !value.startsWith("//") ? value : "/";
 }
 
-async function sha256(value: string): Promise<string> {
-  return base64Url(new Uint8Array(await crypto.subtle.digest("SHA-256", encoder.encode(value))));
-}
-
-function safeReturnPath(value: string | undefined): string {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/";
-}
-
-function frontendRedirect(params: Record<string, string>): string {
-  const url = new URL("/login", env.GOVBR_FRONTEND_URL);
-  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
-  return url.toString();
+async function verifyGatewaySignature(rawBody: string, timestamp: string, signature: string): Promise<boolean> {
+  const unixTime = Number(timestamp);
+  if (!Number.isFinite(unixTime) || Math.abs(Date.now() - unixTime) > 60_000) return false;
+  const key = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(env.MTLS_GATEWAY_SECRET),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const received = Uint8Array.from(signature.match(/.{2}/g) ?? [], (byte) => Number.parseInt(byte, 16));
+  return received.length === 32 && crypto.subtle.verify(
+    "HMAC",
+    key,
+    received,
+    encoder.encode(`${timestamp}.${rawBody}`),
+  );
 }
 
 export function registerAuthRoutes(app: Hono) {
-  app.get("/auth/govbr/start", async (c) => {
-    const state = randomToken("QD");
-    const nonce = randomToken("QD");
-    const codeVerifier = randomToken("QD") + randomToken("QD");
-    const stateHash = await hashToken(state);
-    await sql`
-      insert into "GovBrAuthAttempt" ("stateHash", nonce, "codeVerifier", "returnPath", "expiresAt")
-      values (${stateHash}, ${nonce}, ${codeVerifier}, ${safeReturnPath(c.req.query("returnPath"))}, now() + interval '10 minutes')
-    `;
-
-    const authorize = new URL("/authorize", env.GOVBR_BASE_URL);
-    authorize.searchParams.set("response_type", "code");
-    authorize.searchParams.set("client_id", env.GOVBR_CLIENT_ID);
-    authorize.searchParams.set("scope", "openid profile email govbr_recupera_certificadox509");
-    authorize.searchParams.set("redirect_uri", env.GOVBR_REDIRECT_URI);
-    authorize.searchParams.set("state", state);
-    authorize.searchParams.set("nonce", nonce);
-    authorize.searchParams.set("code_challenge", await sha256(codeVerifier));
-    authorize.searchParams.set("code_challenge_method", "S256");
-    return c.redirect(authorize.toString());
-  });
-
-  app.get("/auth/govbr/callback", async (c) => {
-    const code = c.req.query("code");
-    const state = c.req.query("state");
-    if (!code || !state) return c.redirect(frontendRedirect({ erro: "retorno_invalido" }));
-
-    const stateHash = await hashToken(state);
-    const [attempt] = await sql<{ nonce: string; codeVerifier: string; returnPath: string }[]>`
-      delete from "GovBrAuthAttempt"
-      where "stateHash" = ${stateHash} and "expiresAt" > now()
-      returning nonce, "codeVerifier", "returnPath"
-    `;
-    if (!attempt) return c.redirect(frontendRedirect({ erro: "sessao_expirada" }));
-
-    const credentials = btoa(`${env.GOVBR_CLIENT_ID}:${env.GOVBR_CLIENT_SECRET}`);
-    const tokenResponse = await fetch(new URL("/token", env.GOVBR_BASE_URL), {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded", authorization: `Basic ${credentials}` },
-      body: new URLSearchParams({
-        grant_type: "authorization_code",
-        code,
-        redirect_uri: env.GOVBR_REDIRECT_URI,
-        code_verifier: attempt.codeVerifier,
-      }),
-    });
-    const tokens = await tokenResponse.json();
-    if (!tokenResponse.ok || !tokens.id_token || !tokens.access_token) {
-      console.error("Falha no token GOV.BR", tokenResponse.status);
-      return c.redirect(frontendRedirect({ erro: "falha_no_provedor" }));
+  app.post("/auth/mtls/authorize", async (c) => {
+    const rawBody = await c.req.text();
+    const timestamp = c.req.header("x-gateway-timestamp") ?? "";
+    const signature = c.req.header("x-gateway-signature") ?? "";
+    if (!(await verifyGatewaySignature(rawBody, timestamp, signature))) {
+      return c.json({ ok: false, erro: "gateway não autorizado" }, 401);
     }
 
-    const jwks = createRemoteJWKSet(new URL("/jwk", env.GOVBR_BASE_URL));
-    const { payload } = await jwtVerify(tokens.id_token, jwks, {
-      audience: env.GOVBR_CLIENT_ID,
-      issuer: [env.GOVBR_BASE_URL, `${env.GOVBR_BASE_URL}/`],
-    });
-    if (payload.nonce !== attempt.nonce || typeof payload.sub !== "string") {
-      return c.redirect(frontendRedirect({ erro: "identidade_invalida" }));
+    const body = gatewaySchema.parse(JSON.parse(rawBody));
+    if (new Date(body.validTo).getTime() <= Date.now()) {
+      return c.json({ ok: false, erro: "certificado expirado" }, 401);
     }
 
-    const certResponse = await fetch(new URL("/api/x509/info", env.GOVBR_BASE_URL), {
-      headers: { authorization: `Bearer ${tokens.access_token}` },
-    });
-    const certificate = await certResponse.json();
-    const methods = Array.isArray(certificate.amr) ? certificate.amr.map(String) : [];
-    if (!certResponse.ok || certificate.type !== "device" || !methods.some((method: string) => method.startsWith("x509"))) {
-      return c.redirect(frontendRedirect({ erro: "use_certificado_fisico" }));
-    }
-
-    const subjectHash = await hashIdentity(payload.sub);
+    const fingerprintHash = await hashToken(body.fingerprint);
     const [user] = await sql<{ id: string }[]>`
       select id from "InstitutionalUser"
-      where "govbrSubjectHash" = ${subjectHash} and active = true
-        and ("expectedCnpj" is null or "expectedCnpj" = ${String(payload.cnpj ?? "").replace(/\D/g, "")})
+      where "certificateFingerprintHash" = ${fingerprintHash} and active = true
     `;
-    if (!user) return c.redirect(frontendRedirect({ erro: "usuario_nao_cadastrado" }));
+    if (!user) return c.json({ ok: false, erro: "certificado não cadastrado" }, 403);
 
     const exchangeCode = randomToken("QD");
     const codeHash = await hashToken(exchangeCode);
-    await sql.begin(async (tx) => {
-      await tx`insert into "AuthExchangeCode" ("codeHash", "userId", "expiresAt") values (${codeHash}, ${user.id}, now() + interval '1 minute')`;
-      await tx`update "InstitutionalUser" set "lastLoginAt" = now() where id = ${user.id}`;
-    });
-    return c.redirect(frontendRedirect({ code: exchangeCode, returnPath: attempt.returnPath }));
+    try {
+      await sql.begin(async (tx) => {
+        await tx`insert into "MtlsGatewayRequest" ("requestId", "expiresAt") values (${body.requestId}, now() + interval '2 minutes')`;
+        await tx`insert into "AuthExchangeCode" ("codeHash", "userId", "expiresAt") values (${codeHash}, ${user.id}, now() + interval '1 minute')`;
+        await tx`update "InstitutionalUser" set "lastLoginAt" = now() where id = ${user.id}`;
+        await tx`delete from "MtlsGatewayRequest" where "expiresAt" < now()`;
+      });
+    } catch {
+      return c.json({ ok: false, erro: "requisição já utilizada" }, 409);
+    }
+
+    return c.json({ code: exchangeCode, returnPath: safeReturnPath(body.returnPath) });
   });
 
   app.post("/auth/exchange", async (c) => {
@@ -143,11 +105,5 @@ export function registerAuthRoutes(app: Hono) {
     const token = authorization.startsWith("Bearer ") ? authorization.slice(7).trim() : "";
     if (token) await sql`update "AuthSession" set "revokedAt" = now() where "tokenHash" = ${await hashToken(token)}`;
     return c.json({ ok: true });
-  });
-
-  app.get("/auth/govbr/logout", (c) => {
-    const url = new URL("/logout", env.GOVBR_BASE_URL);
-    url.searchParams.set("post_logout_redirect_uri", env.GOVBR_FRONTEND_URL);
-    return c.redirect(url.toString());
   });
 }

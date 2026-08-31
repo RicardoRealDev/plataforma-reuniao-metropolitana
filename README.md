@@ -17,6 +17,7 @@ Sheets.
 - Banco de dados: PostgreSQL do Supabase
 - Videochamada: LiveKit Cloud
 - Relatórios: Google Sheets/Drive usando OAuth da conta proprietária
+- Login institucional: gateway mTLS em VPS para certificado físico ICP-Brasil
 
 Aplicação: <https://frontend-henna-eight-30.vercel.app>
 
@@ -109,22 +110,20 @@ a testes.
 - O segredo da API do LiveKit fica somente no servidor; o navegador recebe um
   token temporário de participante.
 - O webhook valida a assinatura enviada pelo LiveKit.
-- O login institucional usa certificado físico ICP-Brasil por meio do GOV.BR.
-  A integração permanece em homologação até o órgão fornecer as credenciais.
+- O login institucional usa diretamente o certificado físico ICP-Brasil por
+  meio de um gateway mTLS próprio, sem redirecionamento ao GOV.BR.
 
-### Variáveis do Login GOV.BR
+### Variáveis do login por token físico
 
 ```env
 AUTH_TOKEN_PEPPER=segredo-aleatorio-com-pelo-menos-32-caracteres
-GOVBR_CLIENT_ID=credencial-fornecida-pelo-govbr
-GOVBR_CLIENT_SECRET=segredo-fornecido-pelo-govbr
-GOVBR_BASE_URL=https://sso.staging.acesso.gov.br
-GOVBR_REDIRECT_URI=https://SEU_PROJETO.supabase.co/functions/v1/api/auth/govbr/callback
-GOVBR_FRONTEND_URL=https://seu-dominio-oficial.gov.br
+MTLS_GATEWAY_SECRET=segredo-compartilhado-com-o-gateway-com-32-ou-mais-caracteres
 ```
 
 O fluxo e as decisões de segurança estão documentados em
-`docs/adr/0001-autenticacao-certificado-govbr.md`.
+`docs/adr/0001-autenticacao-certificado-mtls.md`. O serviço do VPS está em
+`auth-gateway/` e inclui Docker Compose, Nginx, o gateway Node.js e instruções
+de instalação.
 
 ## Fora de escopo do MVP
 

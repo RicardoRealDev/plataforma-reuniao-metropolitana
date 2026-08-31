@@ -24,10 +24,6 @@ export function randomToken(prefix: "QD" | "QDS"): string {
   return `${prefix}_${value}`;
 }
 
-export async function hashIdentity(value: string): Promise<string> {
-  return hashToken(value.replace(/\D/g, ""));
-}
-
 export async function hashToken(token: string): Promise<string> {
   const key = await crypto.subtle.importKey(
     "raw",
