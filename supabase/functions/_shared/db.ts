@@ -5,4 +5,10 @@ import { env } from "./env.ts";
 export const sql = postgres(env.DB_POOL_URL, {
   prepare: false,
   ssl: "require",
+  // Edge Functions podem criar várias instâncias em paralelo. O pool padrão
+  // do postgres.js abre até 10 conexões por instância e esgota rapidamente o
+  // limite do Supavisor durante uma sequência de chamadas da reunião.
+  max: 1,
+  idle_timeout: 20,
+  connect_timeout: 10,
 });
