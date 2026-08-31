@@ -4,10 +4,7 @@ import { getCurrentAttendance } from "../domain/attendance.ts";
 import { getAgendaResult } from "../domain/quorum.ts";
 import type { AgendaItem, Meeting, Member, Vote } from "../types.ts";
 
-const SCOPES = [
-  "https://www.googleapis.com/auth/spreadsheets",
-  "https://www.googleapis.com/auth/drive.file",
-];
+const SCOPES = ["https://www.googleapis.com/auth/drive.file"];
 
 interface ServiceAccountCredentials {
   client_email: string;
@@ -27,7 +24,12 @@ interface VoteWithMember extends Vote {
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
 function isEnabled(): boolean {
-  return env.SHEETS_SYNC_ENABLED && Boolean(env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  const hasOauth = Boolean(
+    env.GOOGLE_OAUTH_CLIENT_ID &&
+      env.GOOGLE_OAUTH_CLIENT_SECRET &&
+      env.GOOGLE_OAUTH_REFRESH_TOKEN,
+  );
+  return env.SHEETS_SYNC_ENABLED && (hasOauth || Boolean(env.GOOGLE_SERVICE_ACCOUNT_JSON));
 }
 
 function base64Url(value: string | Uint8Array): string {
@@ -66,6 +68,32 @@ async function importPrivateKey(pem: string): Promise<CryptoKey> {
 
 async function getAccessToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now() + 60_000) return cachedToken.value;
+
+  if (
+    env.GOOGLE_OAUTH_CLIENT_ID &&
+    env.GOOGLE_OAUTH_CLIENT_SECRET &&
+    env.GOOGLE_OAUTH_REFRESH_TOKEN
+  ) {
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: env.GOOGLE_OAUTH_CLIENT_ID,
+        client_secret: env.GOOGLE_OAUTH_CLIENT_SECRET,
+        refresh_token: env.GOOGLE_OAUTH_REFRESH_TOKEN,
+        grant_type: "refresh_token",
+      }),
+    });
+    const body = await response.json();
+    if (!response.ok || !body.access_token) {
+      throw new Error(`Falha ao renovar OAuth Google (${response.status}): ${JSON.stringify(body)}`);
+    }
+    cachedToken = {
+      value: body.access_token as string,
+      expiresAt: Date.now() + Number(body.expires_in ?? 3600) * 1000,
+    };
+    return cachedToken.value;
+  }
 
   const credentials = parseCredentials();
   const now = Math.floor(Date.now() / 1000);
