@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import type { AgendaItem, Council, Meeting, MemberAttendance } from '../lib/types.js';
+import { useAuth } from '../lib/auth.js';
 
 type MeetingDetail = Meeting & { council: Council; agendaItems: AgendaItem[] };
 
@@ -15,6 +16,7 @@ interface AgendaResult {
 }
 
 export function MesaOperador() {
+  const { user } = useAuth();
   const { meetingId } = useParams<{ meetingId: string }>();
   const [meeting, setMeeting] = useState<MeetingDetail | null>(null);
   const [attendance, setAttendance] = useState<MemberAttendance[]>([]);
@@ -83,6 +85,7 @@ export function MesaOperador() {
     carregar();
   }
 
+  if (user?.accessLevel === 'PARTICIPANT') return <Navigate to="/" replace />;
   if (!meeting) return null;
 
   return (
