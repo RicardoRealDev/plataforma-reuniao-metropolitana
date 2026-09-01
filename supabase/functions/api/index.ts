@@ -1,5 +1,6 @@
 import { Hono } from "jsr:@hono/hono@4";
 import { cors } from "jsr:@hono/hono@4/cors";
+import { ZodError } from "npm:zod@3";
 import { registerCouncilRoutes } from "./routes/councils.ts";
 import { registerMeetingRoutes } from "./routes/meetings.ts";
 import { registerAttendanceRoutes } from "./routes/attendance.ts";
@@ -16,6 +17,10 @@ const app = new Hono().basePath("/api");
 app.use("*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization", "X-Admin-Token"] }));
 
 app.onError((err, c) => {
+  if (err instanceof ZodError) {
+    const message = err.issues[0]?.message ?? "dados inválidos";
+    return c.json({ ok: false, erro: message }, 400);
+  }
   console.error(err);
   return c.json({ ok: false, erro: "erro interno" }, 500);
 });

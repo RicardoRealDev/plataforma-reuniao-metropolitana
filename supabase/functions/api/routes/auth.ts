@@ -43,11 +43,13 @@ const emailLoginSchema = z.object({
   password: z.string().min(8).max(200),
 });
 const changePasswordSchema = z.object({
-  newPassword: z.string().min(12).max(200)
-    .regex(/[a-z]/, "inclua uma letra minúscula")
-    .regex(/[A-Z]/, "inclua uma letra maiúscula")
-    .regex(/[0-9]/, "inclua um número")
-    .regex(/[^A-Za-z0-9]/, "inclua um caractere especial"),
+  newPassword: z.string()
+    .min(12, "a senha deve ter pelo menos 12 caracteres")
+    .max(200, "a senha deve ter no máximo 200 caracteres")
+    .regex(/[a-z]/, "a senha deve incluir uma letra minúscula")
+    .regex(/[A-Z]/, "a senha deve incluir uma letra maiúscula")
+    .regex(/[0-9]/, "a senha deve incluir um número")
+    .regex(/[^A-Za-z0-9]/, "a senha deve incluir um caractere especial"),
 });
 const encoder = new TextEncoder();
 
