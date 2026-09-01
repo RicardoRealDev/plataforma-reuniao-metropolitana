@@ -3,7 +3,14 @@ import { z } from "npm:zod@3";
 import { sql } from "../../_shared/db.ts";
 import { authenticate, hashToken, isAuthResponse, randomToken, requireAuth } from "../../_shared/auth.ts";
 import { env } from "../../_shared/env.ts";
-import { derivePasswordHash, normalizeUsername, passwordIterations, randomSalt, verifyPassword } from "../../_shared/password.ts";
+import {
+  derivePasswordHash,
+  normalizeEmail,
+  normalizeUsername,
+  passwordIterations,
+  randomSalt,
+  verifyPassword,
+} from "../../_shared/password.ts";
 import { documentLast2, hashCpf, maskedDocument } from "../../_shared/certificateIdentity.ts";
 
 const gatewaySchema = z.object({
@@ -31,6 +38,10 @@ const passwordLoginSchema = z.object({
   username: z.string().trim().min(4).max(100),
   password: z.string().min(8).max(200),
 });
+const emailLoginSchema = z.object({
+  email: z.string().trim().email().max(320),
+  password: z.string().min(8).max(200),
+});
 const changePasswordSchema = z.object({
   newPassword: z.string().min(12).max(200)
     .regex(/[a-z]/, "inclua uma letra minúscula")
@@ -44,6 +55,7 @@ function safeReturnPath(value: string): string {
   return value.startsWith("/") && !value.startsWith("//") ? value : "/";
 }
 async function verifyGatewaySignature(rawBody: string, timestamp: string, signature: string): Promise<boolean> {
+  if (!env.MTLS_GATEWAY_SECRET) return false;
   const unixTime = Number(timestamp);
   if (!Number.isFinite(unixTime) || Math.abs(Date.now() - unixTime) > 60_000) return false;
   const key = await crypto.subtle.importKey(
@@ -63,6 +75,81 @@ async function verifyGatewaySignature(rawBody: string, timestamp: string, signat
 }
 
 export function registerAuthRoutes(app: Hono) {
+  app.post("/auth/email/login", async (c) => {
+    const body = emailLoginSchema.parse(await c.req.json());
+    const emailNormalized = normalizeEmail(body.email);
+    const guardHash = await hashToken(`email:${emailNormalized}`);
+    const [guard] = await sql<{ lockedUntil: string | null }[]>`
+      select "lockedUntil" from "PasswordLoginGuard" where "usernameHash" = ${guardHash}
+    `;
+    if (guard?.lockedUntil && new Date(guard.lockedUntil).getTime() > Date.now()) {
+      return c.json({ ok: false, erro: "acesso temporariamente bloqueado; tente novamente mais tarde" }, 429);
+    }
+
+    const [credential] = await sql<{
+      id: string; passwordSalt: string; passwordHash: string; passwordIterations: number;
+      name: string; institution: string; function: string; accessLevel: string;
+      memberId: string | null; emailDisplay: string; mustChangePassword: boolean;
+    }[]>`
+      select id, "passwordSalt", "passwordHash", "passwordIterations", name, institution,
+             "function", "accessLevel", "memberId", "emailDisplay", "mustChangePassword"
+      from "InstitutionalUser"
+      where "emailNormalized" = ${emailNormalized} and active = true and "passwordHash" is not null
+    `;
+    const valid = credential
+      ? await verifyPassword(body.password, credential.passwordSalt, credential.passwordHash, credential.passwordIterations)
+      : (await derivePasswordHash(body.password, "00000000000000000000000000000000", passwordIterations), false);
+
+    if (!credential || !valid) {
+      await sql`
+        insert into "PasswordLoginGuard" ("usernameHash", "failedCount", "lockedUntil")
+        values (${guardHash}, 1, null)
+        on conflict ("usernameHash") do update set
+          "failedCount" = case
+            when "PasswordLoginGuard"."lockedUntil" is not null and "PasswordLoginGuard"."lockedUntil" <= now() then 1
+            else "PasswordLoginGuard"."failedCount" + 1
+          end,
+          "lockedUntil" = case
+            when (case
+              when "PasswordLoginGuard"."lockedUntil" is not null and "PasswordLoginGuard"."lockedUntil" <= now() then 1
+              else "PasswordLoginGuard"."failedCount" + 1
+            end) >= 5 then now() + interval '15 minutes'
+            else "PasswordLoginGuard"."lockedUntil"
+          end,
+          "updatedAt" = now()
+      `;
+      return c.json({ ok: false, erro: "e-mail ou senha inválidos" }, 401);
+    }
+
+    await sql`delete from "PasswordLoginGuard" where "usernameHash" = ${guardHash}`;
+    const accessToken = randomToken("QDS");
+    const sessionHash = await hashToken(accessToken);
+    await sql.begin(async (tx) => {
+      await tx`
+        insert into "AuthSession" (id, "userId", "tokenHash", "authMethod", "expiresAt")
+        values (${crypto.randomUUID()}, ${credential.id}, ${sessionHash}, 'EMAIL_PASSWORD', now() + interval '12 hours')
+      `;
+      await tx`update "InstitutionalUser" set "lastLoginAt" = now() where id = ${credential.id}`;
+    });
+    return c.json({
+      accessToken,
+      expiresIn: 43200,
+      user: {
+        id: credential.id,
+        name: credential.name,
+        institution: credential.institution,
+        function: credential.function,
+        accessLevel: credential.accessLevel,
+        memberId: credential.memberId,
+        email: credential.emailDisplay,
+        mustChangePassword: credential.mustChangePassword,
+        identityVerified: true,
+        certificateIdentityName: null,
+        authenticationMethod: "EMAIL_PASSWORD",
+      },
+    });
+  });
+
   app.post("/auth/password/login", async (c) => {
     const body = passwordLoginSchema.parse(await c.req.json());
     const usernameHash = await hashToken(normalizeUsername(body.username));
@@ -76,10 +163,10 @@ export function registerAuthRoutes(app: Hono) {
     const [credential] = await sql<{
       id: string; passwordSalt: string; passwordHash: string; passwordIterations: number;
       name: string; institution: string; function: string; accessLevel: string;
-      memberId: string | null; mustChangePassword: boolean;
+      memberId: string | null; emailDisplay: string | null; mustChangePassword: boolean;
     }[]>`
       select id, "passwordSalt", "passwordHash", "passwordIterations", name, institution,
-             "function", "accessLevel", "memberId", "mustChangePassword"
+             "function", "accessLevel", "memberId", "emailDisplay", "mustChangePassword"
       from "InstitutionalUser"
       where "usernameHash" = ${usernameHash} and active = true and "passwordHash" is not null
     `;
@@ -125,6 +212,7 @@ export function registerAuthRoutes(app: Hono) {
         function: credential.function,
         accessLevel: credential.accessLevel,
         memberId: credential.memberId,
+        email: credential.emailDisplay,
         mustChangePassword: credential.mustChangePassword,
         identityVerified: false,
         certificateIdentityName: null,
@@ -309,7 +397,7 @@ export function registerAuthRoutes(app: Hono) {
     const accessToken = randomToken("QDS");
     const sessionHash = await hashToken(accessToken);
     const [user] = await sql<Record<string, unknown>[]>`
-      select id, name, institution, "function", "accessLevel", "memberId", "mustChangePassword",
+      select id, name, institution, "function", "accessLevel", "memberId", "emailDisplay" as email, "mustChangePassword",
              "certificateIdentityName", ("identityVerifiedAt" is not null) as "identityVerified",
              'ICPBRASIL_MTLS' as "authenticationMethod"
       from "InstitutionalUser" where id = ${exchange.userId}
@@ -328,7 +416,7 @@ export function registerAuthRoutes(app: Hono) {
   });
 
   app.post("/auth/password/change", async (c) => {
-    const auth = await requireAuth(c, ["ADMIN"], true);
+    const auth = await requireAuth(c, undefined, true);
     if (isAuthResponse(auth)) return auth;
     const { newPassword } = changePasswordSchema.parse(await c.req.json());
     const salt = randomSalt();

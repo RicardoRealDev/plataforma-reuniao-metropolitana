@@ -79,7 +79,7 @@ export function SalaDeVideo() {
             <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
               <p className="font-semibold">{user.name}</p>
               <p>{user.function} · {user.institution}</p>
-              <p className="mt-1 text-xs">Identidade vinculada ao token institucional.</p>
+              <p className="mt-1 text-xs">Acesso vinculado ao e-mail institucional.</p>
             </div>
           ) : (
             <select

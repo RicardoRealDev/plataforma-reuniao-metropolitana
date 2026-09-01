@@ -39,7 +39,7 @@ export function Home() {
         </div>
         {user ? (
           <div className="flex items-center gap-3">
-            {user.accessLevel === 'ADMIN' && <Link className="text-sm text-slate-700 underline" to="/admin/identidades">Identidades</Link>}
+            {user.accessLevel === 'ADMIN' && <Link className="text-sm text-slate-700 underline" to="/admin/acessos">Acessos</Link>}
             <button className="text-sm text-slate-700 underline" onClick={() => void logout()}>Sair</button>
           </div>
         ) : (
@@ -47,7 +47,13 @@ export function Home() {
         )}
       </div>
 
-      {user?.identityVerified && (
+      {user?.authenticationMethod === 'EMAIL_PASSWORD' && (
+        <p className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          Acesso autenticado por e-mail: {user.email}
+        </p>
+      )}
+
+      {user?.authenticationMethod === 'ICPBRASIL_MTLS' && user.identityVerified && (
         <p className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
           Identidade verificada pelo certificado ICP-Brasil: {user.certificateIdentityName ?? user.name}
         </p>

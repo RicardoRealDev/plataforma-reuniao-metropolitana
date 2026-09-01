@@ -16,6 +16,10 @@ export function normalizeUsername(username: string): string {
   return username.trim().normalize("NFKC").toLocaleLowerCase("pt-BR");
 }
 
+export function normalizeEmail(email: string): string {
+  return email.trim().normalize("NFKC").toLowerCase();
+}
+
 export function randomSalt(): string {
   return toHex(crypto.getRandomValues(new Uint8Array(16)));
 }

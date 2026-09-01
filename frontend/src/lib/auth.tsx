@@ -8,16 +8,17 @@ export interface AuthUser {
   function: string;
   accessLevel: 'ADMIN' | 'OPERATOR' | 'PARTICIPANT';
   memberId: string | null;
+  email: string | null;
   mustChangePassword: boolean;
   identityVerified: boolean;
   certificateIdentityName: string | null;
-  authenticationMethod: 'ICPBRASIL_MTLS' | 'PASSWORD_ADMIN';
+  authenticationMethod: 'EMAIL_PASSWORD' | 'ICPBRASIL_MTLS' | 'PASSWORD_ADMIN';
 }
 
 interface AuthContextValue {
   user: AuthUser | null;
   loading: boolean;
-  exchange(code: string): Promise<AuthUser>;
+  emailLogin(email: string, password: string): Promise<AuthUser>;
   passwordLogin(username: string, password: string): Promise<AuthUser>;
   changePassword(newPassword: string): Promise<void>;
   logout(): Promise<void>;
@@ -40,8 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setLoading(false));
   }, []);
 
-  const exchange = useCallback(async (code: string) => {
-    const result = await api.post<{ accessToken: string; user: AuthUser }>('/auth/exchange', { code });
+  const emailLogin = useCallback(async (email: string, password: string) => {
+    const result = await api.post<{ accessToken: string; user: AuthUser }>('/auth/email/login', { email, password });
     setAccessToken(result.accessToken);
     setUser(result.user);
     return result.user;
@@ -70,8 +71,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, loading, exchange, passwordLogin, changePassword, logout }),
-    [user, loading, exchange, passwordLogin, changePassword, logout],
+    () => ({ user, loading, emailLogin, passwordLogin, changePassword, logout }),
+    [user, loading, emailLogin, passwordLogin, changePassword, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

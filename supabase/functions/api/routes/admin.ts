@@ -5,7 +5,13 @@ import { hashToken, isAuthResponse, requireAuth } from "../../_shared/auth.ts";
 import { maskedDocument } from "../../_shared/certificateIdentity.ts";
 import { sql } from "../../_shared/db.ts";
 import { z } from "npm:zod@3";
-import { derivePasswordHash, normalizeUsername, passwordIterations, randomSalt } from "../../_shared/password.ts";
+import {
+  derivePasswordHash,
+  normalizeEmail,
+  normalizeUsername,
+  passwordIterations,
+  randomSalt,
+} from "../../_shared/password.ts";
 
 const createUserSchema = z.object({
   name: z.string().trim().min(2),
@@ -25,6 +31,25 @@ const createPasswordAdminSchema = z.object({
   username: z.string().trim().min(4).max(100),
   temporaryPassword: z.string().min(8).max(200),
 });
+
+const strongTemporaryPassword = z.string().min(12).max(200)
+  .regex(/[a-z]/, "inclua uma letra minúscula")
+  .regex(/[A-Z]/, "inclua uma letra maiúscula")
+  .regex(/[0-9]/, "inclua um número")
+  .regex(/[^A-Za-z0-9]/, "inclua um caractere especial");
+
+const emailUserSchema = z.object({
+  userId: z.string().uuid().nullable().optional(),
+  email: z.string().trim().email().max(320),
+  temporaryPassword: strongTemporaryPassword,
+  name: z.string().trim().min(2).max(300),
+  institution: z.string().trim().min(2).max(300),
+  function: z.string().trim().min(2).max(200),
+  accessLevel: z.enum(["ADMIN", "OPERATOR", "PARTICIPANT"]),
+  memberId: z.string().nullable().optional(),
+});
+
+const emailUserStatusSchema = z.object({ active: z.boolean() });
 
 const approveEnrollmentSchema = z.object({
   memberId: z.string().nullable().optional(),
@@ -109,6 +134,149 @@ export function registerAdminRoutes(app: Hono) {
     return c.json({
       user: { id, name: body.name, username: body.username, accessLevel: "ADMIN", mustChangePassword: true },
     }, 201);
+  });
+
+  app.get("/admin/email-users", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN"]);
+    if (isAuthResponse(auth)) return auth;
+    const users = await sql<{
+      id: string;
+      name: string;
+      institution: string;
+      function: string;
+      accessLevel: "ADMIN" | "OPERATOR" | "PARTICIPANT";
+      memberId: string | null;
+      email: string | null;
+      active: boolean;
+      mustChangePassword: boolean;
+      lastLoginAt: string | null;
+    }[]>`
+      select id, name, institution, "function", "accessLevel", "memberId",
+             "emailDisplay" as email, active, "mustChangePassword", "lastLoginAt"
+      from "InstitutionalUser"
+      order by active desc, name asc
+    `;
+    return c.json(users);
+  });
+
+  app.post("/admin/email-users", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN"]);
+    if (isAuthResponse(auth)) return auth;
+    const body = emailUserSchema.parse(await c.req.json());
+    const emailNormalized = normalizeEmail(body.email);
+
+    let name = body.name;
+    let institution = body.institution;
+    let functionName = body.function;
+    if (body.memberId) {
+      const [member] = await sql<{ id: string; representante: string; ente: string }[]>`
+        select id, representante, ente from "Member" where id = ${body.memberId}
+      `;
+      if (!member) return c.json({ ok: false, erro: "representação não encontrada" }, 404);
+      name = member.representante;
+      institution = member.ente;
+      if (body.accessLevel === "PARTICIPANT") functionName = "Representante";
+    }
+
+    let userId = body.userId ?? null;
+    if (userId) {
+      const [existingUser] = await sql<{ id: string }[]>`
+        select id from "InstitutionalUser" where id = ${userId}
+      `;
+      if (!existingUser) return c.json({ ok: false, erro: "usuário não encontrado" }, 404);
+    } else if (body.memberId) {
+      const [memberUser] = await sql<{ id: string }[]>`
+        select id from "InstitutionalUser" where "memberId" = ${body.memberId}
+        order by active desc, "createdAt" asc limit 1
+      `;
+      userId = memberUser?.id ?? null;
+    }
+
+    if (userId === auth.id && body.accessLevel !== "ADMIN") {
+      return c.json({ ok: false, erro: "o administrador não pode remover o próprio nível de acesso" }, 409);
+    }
+    if (body.memberId) {
+      const [memberOwner] = await sql<{ id: string }[]>`
+        select id from "InstitutionalUser"
+        where "memberId" = ${body.memberId}
+          and (${userId}::text is null or id <> ${userId})
+        limit 1
+      `;
+      if (memberOwner) {
+        return c.json({ ok: false, erro: "esta representação já está vinculada a outro usuário" }, 409);
+      }
+    }
+
+    const [emailOwner] = await sql<{ id: string }[]>`
+      select id from "InstitutionalUser"
+      where "emailNormalized" = ${emailNormalized}
+        and (${userId}::text is null or id <> ${userId})
+    `;
+    if (emailOwner) return c.json({ ok: false, erro: "este e-mail já está vinculado a outro usuário" }, 409);
+
+    const salt = randomSalt();
+    const passwordHash = await derivePasswordHash(body.temporaryPassword, salt, passwordIterations);
+    const resolvedUserId = userId ?? crypto.randomUUID();
+    await sql.begin(async (tx) => {
+      if (userId) {
+        await tx`
+          update "InstitutionalUser"
+          set name = ${name}, institution = ${institution}, "function" = ${functionName},
+              "accessLevel" = ${body.accessLevel}, "memberId" = ${body.memberId ?? null},
+              "emailNormalized" = ${emailNormalized}, "emailDisplay" = ${body.email.trim()},
+              "passwordSalt" = ${salt}, "passwordHash" = ${passwordHash},
+              "passwordIterations" = ${passwordIterations}, "mustChangePassword" = true,
+              active = true
+          where id = ${resolvedUserId}
+        `;
+      } else {
+        await tx`
+          insert into "InstitutionalUser"
+            (id, name, institution, "function", "accessLevel", "memberId",
+             "emailNormalized", "emailDisplay", "passwordSalt", "passwordHash",
+             "passwordIterations", "mustChangePassword", active)
+          values
+            (${resolvedUserId}, ${name}, ${institution}, ${functionName}, ${body.accessLevel},
+             ${body.memberId ?? null}, ${emailNormalized}, ${body.email.trim()}, ${salt},
+             ${passwordHash}, ${passwordIterations}, true, true)
+        `;
+      }
+      if (resolvedUserId !== auth.id) {
+        await tx`update "AuthSession" set "revokedAt" = now() where "userId" = ${resolvedUserId} and "revokedAt" is null`;
+      }
+    });
+
+    return c.json({
+      user: {
+        id: resolvedUserId,
+        name,
+        institution,
+        function: functionName,
+        accessLevel: body.accessLevel,
+        memberId: body.memberId ?? null,
+        email: body.email.trim(),
+        active: true,
+        mustChangePassword: true,
+      },
+    }, userId ? 200 : 201);
+  });
+
+  app.post("/admin/email-users/:id/status", async (c) => {
+    const auth = await requireAuth(c, ["ADMIN"]);
+    if (isAuthResponse(auth)) return auth;
+    const userId = c.req.param("id");
+    const { active } = emailUserStatusSchema.parse(await c.req.json());
+    if (!active && userId === auth.id) {
+      return c.json({ ok: false, erro: "o administrador não pode desativar a própria conta" }, 409);
+    }
+    const [user] = await sql<{ id: string }[]>`
+      update "InstitutionalUser" set active = ${active} where id = ${userId} returning id
+    `;
+    if (!user) return c.json({ ok: false, erro: "usuário não encontrado" }, 404);
+    if (!active) {
+      await sql`update "AuthSession" set "revokedAt" = now() where "userId" = ${userId} and "revokedAt" is null`;
+    }
+    return c.json({ ok: true, active });
   });
 
   app.get("/admin/certificate-enrollments", async (c) => {

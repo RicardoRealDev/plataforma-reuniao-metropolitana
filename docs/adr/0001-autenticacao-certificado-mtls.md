@@ -1,6 +1,6 @@
 # ADR-0001: Autenticação direta por certificado físico com mTLS
 
-**Status:** Implementada no sistema; gateway aguardando hospedagem mTLS
+**Status:** Substituída pela ADR-0002
 **Data:** 2026-08-31
 
 ## Contexto

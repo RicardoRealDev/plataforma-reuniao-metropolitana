@@ -7,7 +7,7 @@ const schema = z.object({
   LIVEKIT_API_SECRET: z.string(),
   ADMIN_SEED_TOKEN: z.string().optional(),
   AUTH_TOKEN_PEPPER: z.string().min(32),
-  MTLS_GATEWAY_SECRET: z.string().min(32),
+  MTLS_GATEWAY_SECRET: z.string().min(32).optional(),
   GOOGLE_SERVICE_ACCOUNT_JSON: z.string().optional(),
   GOOGLE_OAUTH_CLIENT_ID: z.string().optional(),
   GOOGLE_OAUTH_CLIENT_SECRET: z.string().optional(),

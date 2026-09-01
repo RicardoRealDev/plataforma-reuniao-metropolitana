@@ -11,10 +11,11 @@ export interface AuthUser {
   function: string;
   accessLevel: AccessLevel;
   memberId: string | null;
+  email: string | null;
   mustChangePassword: boolean;
   identityVerified: boolean;
   certificateIdentityName: string | null;
-  authenticationMethod: "ICPBRASIL_MTLS" | "PASSWORD_ADMIN";
+  authenticationMethod: "EMAIL_PASSWORD" | "ICPBRASIL_MTLS" | "PASSWORD_ADMIN";
 }
 
 const encoder = new TextEncoder();
@@ -47,8 +48,9 @@ export async function authenticate(c: Context): Promise<AuthUser | null> {
 
   const tokenHash = await hashToken(token);
   const [user] = await sql<AuthUser[]>`
-    select u.id, u.name, u.institution, u."function", u."accessLevel", u."memberId", u."mustChangePassword",
-           (u."identityVerifiedAt" is not null) as "identityVerified",
+    select u.id, u.name, u.institution, u."function", u."accessLevel", u."memberId",
+           u."emailDisplay" as email, u."mustChangePassword",
+           (s."authMethod" = 'EMAIL_PASSWORD' or u."identityVerifiedAt" is not null) as "identityVerified",
            u."certificateIdentityName", s."authMethod" as "authenticationMethod"
     from "AuthSession" s
     join "InstitutionalUser" u on u.id = s."userId"
