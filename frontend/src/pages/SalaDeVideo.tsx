@@ -75,19 +75,26 @@ export function SalaDeVideo() {
       {meeting && (
         <>
           <p className="mb-4 text-gray-600">{meeting.titulo}</p>
-          <select
-            className="mb-4 w-full rounded border border-gray-300 p-2"
-            value={memberId}
-            onChange={(e) => setMemberId(e.target.value)}
-            disabled={user?.accessLevel === 'PARTICIPANT'}
-          >
-            <option value="">Selecione seu ente/representação</option>
-            {meeting.council.members.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.ente} — {m.representante}
-              </option>
-            ))}
-          </select>
+          {user?.accessLevel === 'PARTICIPANT' ? (
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+              <p className="font-semibold">{user.name}</p>
+              <p>{user.function} · {user.institution}</p>
+              <p className="mt-1 text-xs">Identidade vinculada ao token institucional.</p>
+            </div>
+          ) : (
+            <select
+              className="mb-4 w-full rounded border border-gray-300 p-2"
+              value={memberId}
+              onChange={(e) => setMemberId(e.target.value)}
+            >
+              <option value="">Selecione seu ente/representação</option>
+              {meeting.council.members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.ente} — {m.representante}
+                </option>
+              ))}
+            </select>
+          )}
           <button className="rounded bg-slate-800 px-4 py-2 text-white" onClick={entrar} disabled={!memberId}>
             Entrar com câmera/microfone
           </button>

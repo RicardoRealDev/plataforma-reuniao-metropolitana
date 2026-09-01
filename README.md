@@ -21,6 +21,10 @@ Sheets.
 
 Aplicação: <https://frontend-henna-eight-30.vercel.app>
 
+A API e a interface de gestão de identidades já estão publicadas. Para ativar o
+botão do token em produção ainda é necessário hospedar `auth-gateway/` em um
+servidor que aceite mTLS e configurar `VITE_MTLS_AUTH_URL` na Vercel.
+
 O Railway não faz parte da arquitetura atual. O Docker Compose permanece no
 repositório apenas para desenvolvimento local opcional.
 
@@ -112,6 +116,11 @@ a testes.
 - O webhook valida a assinatura enviada pelo LiveKit.
 - O login institucional usa diretamente o certificado físico ICP-Brasil por
   meio de um gateway mTLS próprio, sem redirecionamento ao GOV.BR.
+- No primeiro acesso, nome e documento mascarado aparecem para aprovação em
+  `/admin/identidades`; depois do vínculo, o certificado identifica
+  automaticamente o participante e sua representação.
+- CPF e impressão digital completos não ficam gravados: o banco persiste HMACs
+  não reversíveis e apenas os últimos caracteres necessários para auditoria.
 - Administradores podem ter um acesso de contingência por usuário e senha, com
   bloqueio após cinco falhas, sessão de duas horas e troca obrigatória da senha
   temporária no primeiro login.

@@ -42,31 +42,32 @@ docker compose logs -f
 O gateway não publica a porta 3000. Apenas o Nginx, que sobrescreve os cabeçalhos
 de certificado, consegue acessá-lo pela rede interna do Compose.
 
-## Cadastrar um certificado
+## Primeiro acesso e identificação
 
 1. Conecte o token no computador.
-2. Abra `https://token.exemplo.gov.br/certificate`.
+2. Na aplicação, clique em **Identificar e entrar**.
 3. Selecione o certificado e informe o PIN na janela do sistema.
-4. Copie `fingerprint256` e cadastre o usuário pela rota administrativa.
+4. O gateway extrai nome e CPF/CNPJ dos campos ICP-Brasil. O navegador recebe
+   somente o documento mascarado.
+5. Se for o primeiro acesso, o administrador abre `/admin/identidades`, confere
+   o nome e vincula a identidade ao ente/representação.
+6. O participante valida o token novamente e entra. Certificados renovados são
+   associados automaticamente quando o CPF corresponde a um único cadastro.
 
-Exemplo de corpo para `POST /api/admin/users`:
+`GET /certificate` pode ser usado para diagnóstico e devolve apenas dados
+sanitizados: nome, documento mascarado, emissor, validade e os oito últimos
+caracteres da impressão digital.
 
-```json
-{
-  "name": "Nome do representante",
-  "institution": "Prefeitura de Exemplo",
-  "function": "Representante titular",
-  "accessLevel": "PARTICIPANT",
-  "memberId": "id-do-membro",
-  "certificateFingerprint": "AA:BB:...:FF"
-}
-```
+### Driver do token no Windows
 
-A API salva somente um HMAC da impressão digital. O valor completo não fica no
-banco. Certificados renovados precisam ser cadastrados novamente.
+O leitor aparecer no Gerenciador de Dispositivos não é suficiente. O CSP/KSP do
+fabricante precisa estar instalado para Chrome/Edge apresentarem o certificado.
+Valide com `certutil -scinfo`: o comando deve listar o certificado sem o erro
+`SCardGetCardTypeProviderName`.
 
 ## Produção
 
 Descomente `ssl_crl` em `nginx/default.conf.template` somente depois de instalar
 e automatizar a atualização de `certs/crl-bundle.pem`. A validação de revogação
-é obrigatória antes de aceitar usuários reais.
+é obrigatória antes de aceitar usuários reais. O gateway não deve ser publicado
+sem domínio HTTPS próprio, cadeia oficial da ICP-Brasil e LCR/OCSP operacional.

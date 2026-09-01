@@ -38,11 +38,20 @@ export function Home() {
           {user && <p className="mt-1 text-sm text-gray-500">{user.name} · {user.function} · {user.institution}</p>}
         </div>
         {user ? (
-          <button className="text-sm text-slate-700 underline" onClick={() => void logout()}>Sair</button>
+          <div className="flex items-center gap-3">
+            {user.accessLevel === 'ADMIN' && <Link className="text-sm text-slate-700 underline" to="/admin/identidades">Identidades</Link>}
+            <button className="text-sm text-slate-700 underline" onClick={() => void logout()}>Sair</button>
+          </div>
         ) : (
           <Link className="rounded bg-slate-800 px-4 py-2 text-sm text-white" to="/login">Entrar</Link>
         )}
       </div>
+
+      {user?.identityVerified && (
+        <p className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+          Identidade verificada pelo certificado ICP-Brasil: {user.certificateIdentityName ?? user.name}
+        </p>
+      )}
 
       {user && user.accessLevel !== 'PARTICIPANT' && <div className="mb-8 space-y-3">
         <label className="block text-sm font-medium text-gray-700">Conselho</label>

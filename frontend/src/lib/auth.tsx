@@ -9,6 +9,9 @@ export interface AuthUser {
   accessLevel: 'ADMIN' | 'OPERATOR' | 'PARTICIPANT';
   memberId: string | null;
   mustChangePassword: boolean;
+  identityVerified: boolean;
+  certificateIdentityName: string | null;
+  authenticationMethod: 'ICPBRASIL_MTLS' | 'PASSWORD_ADMIN';
 }
 
 interface AuthContextValue {

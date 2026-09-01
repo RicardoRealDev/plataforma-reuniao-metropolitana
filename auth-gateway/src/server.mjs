@@ -1,5 +1,6 @@
 import { createHmac, randomUUID, X509Certificate } from 'node:crypto';
 import { createServer } from 'node:http';
+import { extractCertificateIdentity, publicCertificateIdentity } from './certificate-identity.mjs';
 
 const port = Number(process.env.PORT ?? 3000);
 const supabaseAuthUrl = process.env.SUPABASE_AUTH_URL;
@@ -38,13 +39,25 @@ function certificateFromHeaders(headers) {
 }
 
 async function authorize(certificate, returnPath) {
+  const identity = extractCertificateIdentity(certificate);
   const payload = JSON.stringify({
     requestId: randomUUID(),
-    fingerprint: certificate.fingerprint256.replaceAll(':', '').toUpperCase(),
-    subject: certificate.subject,
-    issuer: certificate.issuer,
-    serialNumber: certificate.serialNumber,
-    validTo: new Date(certificate.validTo).toISOString(),
+    certificate: {
+      fingerprint: identity.fingerprint,
+      fingerprintLast8: identity.fingerprintLast8,
+      subjectName: identity.name,
+      issuerName: identity.issuerName,
+      serialLast8: identity.serialLast8,
+      validFrom: identity.validFrom,
+      validTo: identity.validTo,
+    },
+    identity: {
+      type: identity.type,
+      name: identity.name,
+      cpf: identity.cpf,
+      cnpj: identity.cnpj,
+      legalEntityName: identity.legalEntityName,
+    },
     returnPath,
   });
   const timestamp = String(Date.now());
@@ -73,15 +86,9 @@ const server = createServer(async (request, response) => {
   if (url.pathname === '/certificate' && request.method === 'GET') {
     try {
       const certificate = certificateFromHeaders(request.headers);
+      const identity = extractCertificateIdentity(certificate);
       response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-      response.end(JSON.stringify({
-        fingerprint256: certificate.fingerprint256,
-        subject: certificate.subject,
-        issuer: certificate.issuer,
-        serialNumber: certificate.serialNumber,
-        validFrom: new Date(certificate.validFrom).toISOString(),
-        validTo: new Date(certificate.validTo).toISOString(),
-      }, null, 2));
+      response.end(JSON.stringify(publicCertificateIdentity(identity), null, 2));
     } catch (error) {
       response.writeHead(401, { 'content-type': 'application/json', 'cache-control': 'no-store' });
       response.end(JSON.stringify({ erro: error instanceof Error ? error.message : 'falha_no_certificado' }));
@@ -96,7 +103,11 @@ const server = createServer(async (request, response) => {
   try {
     const certificate = certificateFromHeaders(request.headers);
     const result = await authorize(certificate, safeReturnPath(url.searchParams.get('returnPath')));
-    redirect(response, loginRedirect({ code: result.code, returnPath: result.returnPath }));
+    if (result.status === 'PENDING') {
+      redirect(response, loginRedirect({ enrollment: result.enrollmentCode, returnPath: result.returnPath }));
+    } else {
+      redirect(response, loginRedirect({ code: result.code, returnPath: result.returnPath }));
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'falha_no_certificado';
     redirect(response, loginRedirect({ erro: message }));
